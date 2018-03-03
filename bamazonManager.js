@@ -121,14 +121,6 @@ function updateQuantity(item,quantity,flag) {
 function addProduct(){
 	  inquirer
         .prompt([{
-            name: "id",
-            type: "input",
-            message: "Please type the ID of the product you wish to add."
-        },{
-            name: "quantity",
-            type: "input",
-            message: "Please type how many you wish to add."
-        },{
             name: "name",
             type: "input",
             message: "Please type the name of the product you wish to add."
@@ -137,13 +129,18 @@ function addProduct(){
             type: "input",
             message: "Please type the price of the product you wish to add."
         },{
+            name: "quantity",
+            type: "input",
+            message: "Please type how many you wish to add."
+        },{
+
             name: "department",
             type: "input",
             message: "Please type the department for the product you wish to add."
         }])
         .then(function(answer){
-            var query = "INSERT INTO products (item_id, product_name, department_name, price, stock_quantity) VALUES (?,?,?,?,?)";
-	          var inserts = [answer.id, answer.name, answer.department, answer.price, answer.quantity];
+            var query = "INSERT INTO products (product_name, department_name, price, stock_quantity) VALUES (?,?,?,?)";
+	          var inserts = [answer.name, answer.department, answer.price, answer.quantity];
 	          query = mysql.format(query,inserts);
 	          connection.query(query, function(err,res){
                 if (err) throw err;
