@@ -1,6 +1,8 @@
 // Node.js dependecies
 var mysql = require("mysql");
 var inquirer = require("inquirer");
+var AsciiTable = require('ascii-table');
+var query = "";
 // Connection Strings
 var connection = mysql.createConnection({
     host: "localhost",
@@ -12,75 +14,78 @@ var connection = mysql.createConnection({
     // MySQL Database's schema to connect to
     database: "bamazon"
 });
-// Connect to database
+// Connect to MySQL Database
 connection.connect(function(err) {
     if (err) throw err;
-//console.log("Connected as ID " + connection.threadId);
+    console.log("Database connected as ID " + connection.threadId + "\n");
     listProducts();
 });
-
 function listProducts() {
-    var query = "SELECT * FROM products";
+    query = "SELECT item_id, product_name, price FROM products";
     connection.query(query, function(err, res) {
+        var table = new AsciiTable();
+        table.setHeading("item_id", "product_name", "price");
         for (var i = 0; i < res.length; i++) {
-            var id = res[i].item_id; 
-            var name = res[i].product_name;
-            var times = 30-name.length;
-            for (var j = 0; j<times; j++)
-            {
-                name += " ";
-            }
+            var itemID = res[i].item_id; 
+            var productName = res[i].product_name;
             var price = res[i].price;
-            console.log(`ID: ${id} | Item: ${name} | Price: $${price}`);
+            table.addRow(itemID, productName, price);
         }
+        console.log(table.toString());
         customerUI();
     });
 }
-
 function customerUI() {
-    inquirer
-        .prompt([{
-            name: "id",
-            type: "input",
-            message: "Please type the ID of the product you wish to purchase."
-        },{
-            name: "quantity",
-            type: "input",
-            message: "Please type how many you wish to purchase."
-        }])
-        .then(function(answer){
-    	      var query = "SELECT * FROM products WHERE ??=?";
-    	      var inserts = ["item_id",answer.id];
-    	      var total;
-    	      query = mysql.format(query,inserts);
-            connection.query(query, function(err,res){
-                if (err) throw err;
-                if (res)
-                {
-                    if(res[0].stock_quantity > answer.quantity)
-                    {
-                        total = answer.quantity * res[0].price;
-                        updateQuantity(res[0],answer.quantity,total);
-                        console.log(`Your order total is $${total}`);
-                    }
-                    else if (res[0].stock_quantity < answer.quantity)
-                    {
-            	          console.log("Insufficient quantity!");
-                    }
-                }    
-                listProducts();
-            });
-        });
-}
+    inquirer.prompt([{
+        name: "itemID",
+        type: "input",
+        message: "Please enter the ID of the product you want to purchase:",
+        validate: function(value) {
+            if (isNaN(value) === false) {
+                return true;
+            }
+            return "Please enter numbers only.";
+        }
+    }, {
+        name: "quantity",
+        type: "input",
+        message: "Please enter how many you wish to purchase:",
+        validate: function(value) {
+            if (isNaN(value) === false) {
+                return true;
+            }
+            return "Please enter numbers only.";
+        }
+    }]).then(function(answer) {
+        // connect to the mySQL database and run this query below (shows info of product data based on user input)
+        query = "SELECT product_name, price, stock_quantity, product_sales FROM products WHERE item_id = " + answer.itemID;
+        connection.query(query, function(err, res) {
+            if (err) throw err;
+            var productName = res[0].product_name;
+            var productPrice = parseFloat(res[0].price);
+            var stockQuantity = parseInt(res[0].stock_quantity);
+            var productSales = parseFloat(res[0].product_sales);
 
-function updateQuantity(item,quantity,total) {
-	  var newQuantity;
-    newQuantity = item.stock_quantity + quantity;
-    var newTotal = item.product_sales + total;
-	  var query = "UPDATE products SET ??=?, ??=? WHERE ??=?";
-	  var inserts = ["stock_quantity",newQuantity,"product_sales",newTotal,"item_id",item.item_id];
-	  query = mysql.format(query,inserts);
-	  connection.query(query, function(err,res) {
-        if (err) throw err;
+            var userQuantity = parseInt(answer.quantity);
+
+            var newQuantity = stockQuantity - userQuantity;
+            var totalPrice = productPrice * userQuantity;
+            var newProductSales = productSales + totalPrice;
+            // Check to see if we have enough quantity.
+            if (stockQuantity >= userQuantity) {
+                // Update the database with the new quantity
+                query = "UPDATE products SET stock_quantity = " + newQuantity + ", product_sales = " + newProductSales + " WHERE item_id = " + answer.itemID;
+                connection.query(query, function(err, res) {
+                    if (err) throw err;
+                    //console.log("\n" + res.affectedRows + " products updated!\n");
+                });
+                //Sends the user  message confirming the order when sufficient qty. in stock
+                console.log("\nThank you! Order has been placed! \n" + userQuantity + " orders of " + productName + " for $" + productPrice + " each.\nYour total is $" + totalPrice + ".\n");
+                // Notify user that we don't have their deisred qty.
+            } else {
+                console.log("\n Sorry! " + productName + " has insufficient quantity!\n");
+            }
+            customerUI();
+        });
     });
-}
+};
